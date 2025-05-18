@@ -33,6 +33,21 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define PCF8591_ADDRESS 0x48 << 1
+#define MAX7219_REG_NOOP 0x00
+#define MAX7219_REG_DIGIT0 0x01
+#define MAX7219_REG_DIGIT1 0x02
+#define MAX7219_REG_DIGIT2 0x03
+#define MAX7219_REG_DIGIT3 0x04
+#define MAX7219_REG_DIGIT4 0x05
+#define MAX7219_REG_DIGIT5 0x06
+#define MAX7219_REG_DIGIT6 0x07
+#define MAX7219_REG_DIGIT7 0x08
+#define MAX7219_REG_DECODEMODE 0x09
+#define MAX7219_REG_INTENSITY 0x0A
+#define MAX7219_REG_SCANLIMIT 0x0B
+#define MAX7219_REG_SHUTDOWN 0x0C
+#define MAX7219_REG_DISPLAYTEST 0x0F
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -66,6 +81,8 @@ I2C_HandleTypeDef hi2c1;
 DMA_HandleTypeDef hdma_i2c1_rx;
 DMA_HandleTypeDef hdma_i2c1_tx;
 
+SPI_HandleTypeDef hspi1;
+
 UART_HandleTypeDef huart3;
 
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
@@ -77,11 +94,6 @@ uint8_t uart_rx_buffer[RX_BUFFER_SIZE];
 uint16_t uart_rx_index = 0;
 char uart_tx_buffer[100]; // para mensagens de retorno
 
-
-
-uint8_t rx_idx = 0;
-uint8_t rx_buffer[100];
-uint8_t rx_data[1];
 char ain0[] = "Read_AIN0";
 char ain1[] = "Read_AIN1";
 char ain3[] = "Read_AIN3";
@@ -107,7 +119,26 @@ static void MX_ETH_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_USB_OTG_FS_PCD_Init(void);
 static void MX_I2C1_Init(void);
+static void MX_SPI1_Init(void);
 /* USER CODE BEGIN PFP */
+const uint8_t ascii_font[5][8] = {
+		{0x00,0x08,0x14,0x22,0x22,0x22,0x22,0x00},/*V*/
+		{0x00,0x08,0x08,0x08,0x08,0x08,0x3E,0x00},/*T*/
+		{0x00,0x3C,0x04,0x04,0x04,0x04,0x04,0x00},/*L*/
+		{0x00,0x08,0x08,0x3E,0x08,0x08,0x00,0x00}, /* + */
+		{0x00,0x00,0x00,0x3E,0x00,0x00,0x00,0x00}  /* - */
+};
+
+const uint8_t Init_Commands[5][2]={
+		{0x09,0x00},
+		{0x0A,0x00},
+		{0x0B,0x07},
+		{0x0C,0x01},
+		{0x0F,0x00}
+};
+
+uint8_t shutDown[2];
+
 uint8_t PCF8591_ReadAnalog(uint8_t channel);
 /* USER CODE END PFP */
 
@@ -116,6 +147,8 @@ uint8_t PCF8591_ReadAnalog(uint8_t channel);
 void ProcessCommand(const char *command);
 void Read_ADC_Channel(uint8_t channel);
 void Set_DAC_Value(uint8_t value);
+void MAX7219_SendData(uint8_t reg, uint8_t data);
+void DisplayCharacter(uint8_t character);
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
@@ -227,8 +260,27 @@ int main(void)
   MX_USART3_UART_Init();
   MX_USB_OTG_FS_PCD_Init();
   MX_I2C1_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
-  HAL_UART_Receive_IT(&huart3, rx_data, 1);
+  	void MAX72_Init_F(void)
+  	{
+  		uint8_t i=0;
+  		for(i=0;i<5;i++)
+  		{
+  			shutDown[0]=Init_Commands[i][0];
+  			shutDown[1]=Init_Commands[i][1];
+  			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
+  			HAL_SPI_Transmit_IT(&hspi1,shutDown,2);
+  			HAL_Delay(10);
+  			HAL_GPIO_WritePin(GPIOA,GPIO_PIN_6, GPIO_PIN_SET);
+  			HAL_Delay(10);
+  			HAL_GPIO_WritePin(GPIOA,GPIO_PIN_6, GPIO_PIN_RESET);
+  			HAL_Delay(10);
+  		}
+  	}
+
+  	MAX72_Init_F();
+
   HAL_UART_Receive_IT(&huart3, &uart_rx_char, 1);
   /* USER CODE END 2 */
 
@@ -414,6 +466,54 @@ static void MX_I2C1_Init(void)
 }
 
 /**
+  * @brief SPI1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI1_Init(void)
+{
+
+  /* USER CODE BEGIN SPI1_Init 0 */
+
+  /* USER CODE END SPI1_Init 0 */
+
+  /* USER CODE BEGIN SPI1_Init 1 */
+
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_2LINES_TXONLY;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_128;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 0x0;
+  hspi1.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
+  hspi1.Init.NSSPolarity = SPI_NSS_POLARITY_LOW;
+  hspi1.Init.FifoThreshold = SPI_FIFO_THRESHOLD_01DATA;
+  hspi1.Init.TxCRCInitializationPattern = SPI_CRC_INITIALIZATION_ALL_ZERO_PATTERN;
+  hspi1.Init.RxCRCInitializationPattern = SPI_CRC_INITIALIZATION_ALL_ZERO_PATTERN;
+  hspi1.Init.MasterSSIdleness = SPI_MASTER_SS_IDLENESS_00CYCLE;
+  hspi1.Init.MasterInterDataIdleness = SPI_MASTER_INTERDATA_IDLENESS_00CYCLE;
+  hspi1.Init.MasterReceiverAutoSusp = SPI_MASTER_RX_AUTOSUSP_DISABLE;
+  hspi1.Init.MasterKeepIOState = SPI_MASTER_KEEP_IO_STATE_DISABLE;
+  hspi1.Init.IOSwap = SPI_IO_SWAP_DISABLE;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI1_Init 2 */
+
+  /* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
   * @brief USART3 Initialization Function
   * @param None
   * @retval None
@@ -537,6 +637,9 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOE_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, LD1_Pin|LD3_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
@@ -550,6 +653,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PA6 */
+  GPIO_InitStruct.Pin = GPIO_PIN_6;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LD1_Pin LD3_Pin */
   GPIO_InitStruct.Pin = LD1_Pin|LD3_Pin;
@@ -587,27 +697,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-/*
-uint8_t PCF8591_ReadAnalog(uint8_t channel) {
-	uint8_t config_byte = 0x40 | (channel & 0x03);
-	uint8_t analog_data[2];
-
-	HAL_I2C_Master_Transmit(&hi2c1, PCF8591_ADDRESS, &config_byte, 1, 1000);
-
-	HAL_I2C_Master_Receive(&hi2c1, PCF8591_ADDRESS, analog_data, 2, 1000);
-
-	return analog_data[1];
-}
-
-void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c) {
-    if (hi2c->Instance == I2C1) {
-        // Indica que o recebimento terminou com sucesso
-    	sprintf(uart_tx_buffer, "Comando recebimento com sucesso");
-    }
-}
-
-
-*/
 
 void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c) {
     if (hi2c->Instance == I2C1) {
@@ -638,8 +727,60 @@ void Read_ADC_Channel(uint8_t channel)
 
     uint8_t adc_value = i2c_rx_buffer[0]; // Segundo byte é o valor válido
 
+    if(channel == 0) {
+	  DisplayCharacter(' ' +1);
+	  HAL_Delay(500);
+	  if(adc_value<128){
+		  DisplayCharacter(' ' +3);
+		  HAL_Delay(400);
+	  }else{
+		  DisplayCharacter(' ' +4);
+		  HAL_Delay(400);
+	  }
+
+    } else if(channel == 1){
+	  DisplayCharacter(' ' +0);
+	  HAL_Delay(500);
+	  if(adc_value<128){
+		DisplayCharacter(' ' +3);
+		HAL_Delay(400);
+	  }else{
+		DisplayCharacter(' ' +4);
+		HAL_Delay(400);
+	  }
+
+    } else{
+  		DisplayCharacter(' ' +2);
+	    HAL_Delay(500);
+	    if(adc_value<128){
+	        DisplayCharacter(' ' +3);
+	        HAL_Delay(400);
+	     }else{
+	        DisplayCharacter(' ' +4);
+	        HAL_Delay(400);
+	     }
+
+    }
+
     sprintf(uart_tx_buffer, "AIN%d: %d\r\n", channel, adc_value);
     HAL_UART_Transmit(&huart3, (uint8_t *)uart_tx_buffer, strlen(uart_tx_buffer), HAL_MAX_DELAY);
+}
+
+void MAX7219_SendData(uint8_t reg, uint8_t data) {
+	uint8_t txData[2] = {reg, data};
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET); // Pull CS low
+	HAL_Delay(10);
+	HAL_SPI_Transmit_IT(&hspi1, txData, 2); // Transmit register and data
+	HAL_Delay(10);
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_SET); // Pull CS high
+	HAL_Delay(10);
+}
+
+void DisplayCharacter(uint8_t character) {
+	uint8_t charIndex = character - 32; // ASCII offset
+	for (int i = 0; i < 8; i++) {
+		MAX7219_SendData(MAX7219_REG_DIGIT0 + i, ascii_font[charIndex][i]);
+	}
 }
 
 /* USER CODE END 4 */
