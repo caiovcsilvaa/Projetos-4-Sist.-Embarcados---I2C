@@ -737,42 +737,42 @@ void Read_ADC_Channel(uint8_t channel)
     while (flag_tx_rx != HAL_OK); // Espera recepção
 
     uint8_t adc_value = i2c_rx_buffer[0]; // Segundo byte é o valor válido
+	for(int i = 0; i<9; i++){
+		if(channel == 0) {
+		  DisplayCharacter(' ' +1);
+		  HAL_Delay(500);
+		  if(adc_value>=128){
+			  DisplayCharacter(' ' +3);
+			  HAL_Delay(400);
+		  }else{
+			  DisplayCharacter(' ' +4);
+			  HAL_Delay(400);
+		  }
 
-    if(channel == 0) {
-	  DisplayCharacter(' ' +1);
-	  HAL_Delay(500);
-	  if(adc_value>=128){
-		  DisplayCharacter(' ' +3);
-		  HAL_Delay(400);
-	  }else{
-		  DisplayCharacter(' ' +4);
-		  HAL_Delay(400);
-	  }
+		} else if(channel == 1){
+		  DisplayCharacter(' ' +0);
+		  HAL_Delay(500);
+		  if(adc_value>=128){
+			DisplayCharacter(' ' +3);
+			HAL_Delay(400);
+		  }else{
+			DisplayCharacter(' ' +4);
+			HAL_Delay(400);
+		  }
 
-    } else if(channel == 1){
-	  DisplayCharacter(' ' +0);
-	  HAL_Delay(500);
-	  if(adc_value>=128){
-		DisplayCharacter(' ' +3);
-		HAL_Delay(400);
-	  }else{
-		DisplayCharacter(' ' +4);
-		HAL_Delay(400);
-	  }
+		} else{
+			DisplayCharacter(' ' +2);
+			HAL_Delay(500);
+			if(adc_value>=128){
+				DisplayCharacter(' ' +3);
+				HAL_Delay(400);
+			 }else{
+				DisplayCharacter(' ' +4);
+				HAL_Delay(400);
+			 }
 
-    } else{
-  		DisplayCharacter(' ' +2);
-	    HAL_Delay(500);
-	    if(adc_value>=128){
-	        DisplayCharacter(' ' +3);
-	        HAL_Delay(400);
-	     }else{
-	        DisplayCharacter(' ' +4);
-	        HAL_Delay(400);
-	     }
-
-    }
-
+		}
+	}
     sprintf(uart_tx_buffer, "AIN%d: %d\r\n", channel, adc_value);
     HAL_UART_Transmit(&huart3, (uint8_t *)uart_tx_buffer, strlen(uart_tx_buffer), HAL_MAX_DELAY);
 }
