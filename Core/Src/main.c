@@ -48,6 +48,8 @@
 #define MAX7219_REG_SHUTDOWN 0x0C
 #define MAX7219_REG_DISPLAYTEST 0x0F
 
+#define RX_BUFFER_SIZE 100
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -82,11 +84,11 @@ DMA_HandleTypeDef hdma_i2c1_rx;
 DMA_HandleTypeDef hdma_i2c1_tx;
 
 SPI_HandleTypeDef hspi1;
+DMA_HandleTypeDef hdma_spi1_tx;
 
 UART_HandleTypeDef huart3;
 
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
-#define RX_BUFFER_SIZE 100
 
 /* USER CODE BEGIN PV */
 uint8_t uart_rx_char;
@@ -149,6 +151,7 @@ void Read_ADC_Channel(uint8_t channel);
 void Set_DAC_Value(uint8_t value);
 void MAX7219_SendData(uint8_t reg, uint8_t data);
 void DisplayCharacter(uint8_t character);
+void MAX7219_Init(void);
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
@@ -262,7 +265,7 @@ int main(void)
   MX_I2C1_Init();
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
-  	void MAX72_Init_F(void)
+  	/*void MAX72_Init_F(void)
   	{
   		uint8_t i=0;
   		for(i=0;i<5;i++)
@@ -279,7 +282,9 @@ int main(void)
   		}
   	}
 
-  	MAX72_Init_F();
+  	MAX72_Init_F();*/
+
+  MAX7219_Init();
 
   HAL_UART_Receive_IT(&huart3, &uart_rx_char, 1);
   /* USER CODE END 2 */
@@ -304,6 +309,9 @@ int main(void)
 		  //ProcessCommand((char *)rx_buffer);
 		  uart_data_received = 0;
 	  }
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
 }
@@ -488,7 +496,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_128;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -613,6 +621,9 @@ static void MX_DMA_Init(void)
   /* DMA1_Stream1_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream1_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream1_IRQn);
+  /* DMA1_Stream2_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream2_IRQn);
 
 }
 
@@ -730,7 +741,7 @@ void Read_ADC_Channel(uint8_t channel)
     if(channel == 0) {
 	  DisplayCharacter(' ' +1);
 	  HAL_Delay(500);
-	  if(adc_value<128){
+	  if(adc_value>=128){
 		  DisplayCharacter(' ' +3);
 		  HAL_Delay(400);
 	  }else{
@@ -741,7 +752,7 @@ void Read_ADC_Channel(uint8_t channel)
     } else if(channel == 1){
 	  DisplayCharacter(' ' +0);
 	  HAL_Delay(500);
-	  if(adc_value<128){
+	  if(adc_value>=128){
 		DisplayCharacter(' ' +3);
 		HAL_Delay(400);
 	  }else{
@@ -752,7 +763,7 @@ void Read_ADC_Channel(uint8_t channel)
     } else{
   		DisplayCharacter(' ' +2);
 	    HAL_Delay(500);
-	    if(adc_value<128){
+	    if(adc_value>=128){
 	        DisplayCharacter(' ' +3);
 	        HAL_Delay(400);
 	     }else{
@@ -782,6 +793,28 @@ void DisplayCharacter(uint8_t character) {
 		MAX7219_SendData(MAX7219_REG_DIGIT0 + i, ascii_font[charIndex][i]);
 	}
 }
+
+
+void MAX7219_Init(void) {
+      // Shutdown mode off (start operation)
+      MAX7219_SendData(MAX7219_REG_SHUTDOWN, 0x01);
+
+      // Disable decode mode (use bit patterns to control the LEDs)
+      MAX7219_SendData(MAX7219_REG_DECODEMODE, 0x00);
+
+      // Set scan limit (all 8 digits)
+      MAX7219_SendData(MAX7219_REG_SCANLIMIT, 0x07);
+
+      // Set brightness to medium
+      //MAX7219_SendData(MAX7219_REG_INTENSITY, 0x08);
+      // Set brightness to low
+      MAX7219_SendData(MAX7219_REG_INTENSITY, 0x03);
+
+      // Clear display
+      for (int i = 0; i < 8; i++) {
+          MAX7219_SendData(MAX7219_REG_DIGIT0 + i, 0x00);
+      }
+  }
 
 /* USER CODE END 4 */
 
